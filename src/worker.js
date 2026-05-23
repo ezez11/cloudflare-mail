@@ -333,7 +333,7 @@ async function renderOpenMailbox(request, env, address) {
 
   const limit = parseLimit(new URL(request.url).searchParams.get("limit"));
   const rows = await latestMessages(env, address, limit);
-  return htmlResponse(renderMailboxHtml({ address, display_name: address }, rows.results));
+  return htmlResponse(renderMailboxHtml({ address, display_name: address }, rows.results, auth.token, true));
 }
 
 async function renderOpenMailboxJson(request, env, address) {
@@ -362,7 +362,7 @@ async function renderMailbox(request, env, token) {
 
   const limit = parseLimit(new URL(request.url).searchParams.get("limit"));
   const rows = await latestMessages(env, address.address, limit);
-  return htmlResponse(renderMailboxHtml(address, rows.results));
+  return htmlResponse(renderMailboxHtml(address, rows.results, "", false));
 }
 
 async function renderMailboxJson(request, env, token) {
@@ -1149,7 +1149,7 @@ function renderDomainHtml(domain, messages, token) {
     </div>
   </header>
   <main>${empty}${items}</main>
-  <script>${mailboxListScript()}</script>
+  <script>${mailboxListScript(token)}</script>
 </body>
 </html>`;
 }
@@ -1202,6 +1202,7 @@ function renderMailboxRow(address, count, latestAt, token) {
     </div>
     <div class="mailbox-actions">
       <button type="button" class="mini-button copy-button" data-copy="${escapeHtml(address)}">复制</button>
+      <button type="button" class="mini-button create-link-button" data-link-address="${escapeHtml(address)}">生成并复制专属链接</button>
       <div class="mailbox-stats">
         <span>${count} 封邮件</span>
         <span class="mailbox-time">最新: ${escapeHtml(formatBeijingTime(latestAt))}</span>
@@ -1211,8 +1212,9 @@ function renderMailboxRow(address, count, latestAt, token) {
 </section>`;
 }
 
-function mailboxListScript() {
+function mailboxListScript(token) {
   return `
+    const linkToken = ${JSON.stringify(token || "")};
     const search = document.getElementById("mailboxSearch");
     const count = document.getElementById("searchCount");
     const groups = [...document.querySelectorAll(".mailbox-group")];
@@ -1241,6 +1243,32 @@ function mailboxListScript() {
     }
     document.querySelectorAll("[data-copy]").forEach((button) => {
       button.addEventListener("click", () => copyText(button.dataset.copy, button));
+    });
+    async function createAndCopyLink(address, button) {
+      if (!address) return;
+      const label = button.textContent;
+      button.textContent = "生成中...";
+      try {
+        const response = await fetch("/admin/link.json", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            token: linkToken,
+            address,
+            displayName: address.split("@")[0],
+          }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || !payload.link) throw new Error("link_failed");
+        await copyText(payload.link, button);
+        button.textContent = "已复制链接";
+      } catch {
+        button.textContent = "生成失败";
+      }
+      setTimeout(() => { button.textContent = label; }, 1600);
+    }
+    document.querySelectorAll("[data-link-address]").forEach((button) => {
+      button.addEventListener("click", () => createAndCopyLink(button.dataset.linkAddress, button));
     });
     search.addEventListener("input", () => {
       const q = search.value.trim().toLowerCase();
@@ -1275,10 +1303,13 @@ function messageListScript() {
   `;
 }
 
-function renderMailboxHtml(address, messages) {
+function renderMailboxHtml(address, messages, token = "", showLinkTools = false) {
   const name = escapeHtml(address.display_name || address.address);
   const empty = messages.length ? "" : "<p class='empty'>当前没有邮件。</p>";
   const items = messages.map(renderMessage).join("");
+  const linkTools = showLinkTools
+    ? `<button type="button" class="btn secondary" id="createMailboxLink" data-link-address="${escapeHtml(address.address)}">生成并复制专属链接</button>`
+    : "";
   return `<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -1294,14 +1325,64 @@ function renderMailboxHtml(address, messages) {
       <h1>${name}</h1>
       <div class="sub">${escapeHtml(address.address)} · ${messages.length} 封邮件</div>
     </div>
-    <a class="btn secondary" href="">刷新</a>
+    <div class="header-actions">
+      ${linkTools}
+      <a class="btn secondary" href="">刷新</a>
+    </div>
   </header>
   <main>
     <section class="notice">本邮箱仅用于临时收信，有效期为 1 个月。请勿用于注册、绑定或找回重要账户；继续使用所产生的风险由使用者自行承担。</section>
     ${empty}${items}
   </main>
+  ${showLinkTools ? `<script>${singleMailboxLinkScript(token)}</script>` : ""}
 </body>
 </html>`;
+}
+
+function singleMailboxLinkScript(token) {
+  return `
+    const linkToken = ${JSON.stringify(token || "")};
+    const createButton = document.getElementById("createMailboxLink");
+    async function copyText(text) {
+      if (!text) return;
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+        return;
+      }
+      const textarea = document.createElement("textarea");
+      textarea.value = text;
+      textarea.setAttribute("readonly", "");
+      textarea.style.position = "fixed";
+      textarea.style.left = "-9999px";
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      textarea.remove();
+    }
+    createButton.addEventListener("click", async () => {
+      const label = createButton.textContent;
+      const address = createButton.dataset.linkAddress;
+      createButton.textContent = "生成中...";
+      try {
+        const response = await fetch("/admin/link.json", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            token: linkToken,
+            address,
+            displayName: address.split("@")[0],
+          }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || !payload.link) throw new Error("link_failed");
+        await copyText(payload.link);
+        createButton.textContent = "已复制链接";
+      } catch {
+        createButton.textContent = "生成失败";
+      }
+      setTimeout(() => { createButton.textContent = label; }, 1600);
+    });
+  `;
 }
 function mailboxCss() {
   return `
@@ -1352,6 +1433,7 @@ function mailboxCss() {
     .all-mail-page main { max-width:920px; margin:0 auto; padding:18px 14px 44px; }
     .compact-header { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:14px 24px; position:static; }
     .compact-header h1 { font-size:19px; }
+    .header-actions { display:flex; align-items:center; justify-content:flex-end; gap:10px; flex-wrap:wrap; }
     .mailbox-group { margin-bottom:22px; }
     .mailbox-head { display:flex; align-items:center; justify-content:space-between; gap:16px; background:var(--panel); border:1px solid var(--border); border-radius:8px; margin:0; padding:16px 18px; }
     .mailbox-title { display:flex; align-items:center; gap:10px; min-width:0; }
@@ -1376,6 +1458,7 @@ function mailboxCss() {
       .domain-page main { max-width:none; padding:18px 16px 40px; }
       .inbox-page main, .all-mail-page main { max-width:none; padding:14px 12px 32px; }
       .compact-header { padding:12px; }
+      .header-actions { width:100%; justify-content:flex-start; }
       .form-row { display:block; }
       .form-row button { width:100%; margin-top:8px; }
       .link-result { display:block; }
