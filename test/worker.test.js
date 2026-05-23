@@ -578,6 +578,16 @@ test("domains json lists observed recipient domains", async () => {
 });
 
 test("domains page shows dedicated link form and latest messages panel", async () => {
+  const manyMessages = Array.from({ length: 11 }, (_, index) => ({
+    id: index + 10,
+    recipient: `user${index}@bulk.example.test`,
+    sender: "sender@example.test",
+    subject: `Bulk ${index}`,
+    date_header: "",
+    body: `bulk body ${index}`,
+    raw_truncated: 0,
+    created_at: `2026-05-22T${String(index).padStart(2, "0")}:00:00.000Z`,
+  }));
   const response = await worker.fetch(
     new Request("https://mail.example.test/domains?token=view-token"),
     envWithMessages([
@@ -589,7 +599,7 @@ test("domains page shows dedicated link form and latest messages panel", async (
         date_header: "",
         body: "old body",
         raw_truncated: 0,
-        created_at: "2026-05-22T07:00:00.000Z",
+        created_at: "2026-05-21T23:00:00.000Z",
       },
       {
         id: 2,
@@ -601,6 +611,7 @@ test("domains page shows dedicated link form and latest messages panel", async (
         raw_truncated: 0,
         created_at: "2026-05-22T08:00:00.000Z",
       },
+      ...manyMessages,
     ])
   );
 
@@ -615,8 +626,9 @@ test("domains page shows dedicated link form and latest messages panel", async (
   assert.match(html, /sss\.example\.test/);
   assert.match(html, /mail\.example\.test/);
   assert.match(html, /<h2 class="subject">New<\/h2>/);
-  assert.match(html, /<h2 class="subject">Old<\/h2>/);
   assert.match(html, /new body/);
+  assert.match(html, /Bulk 10/);
+  assert.doesNotMatch(html, /<h2 class="subject">Old<\/h2>/);
   assert.match(html, /\/mailboxes\?token=view-token/);
   assert.match(html, /查看全部邮件/);
   assert.match(html, /创建专属链接/);
