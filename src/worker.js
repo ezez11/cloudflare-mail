@@ -37,7 +37,7 @@ export default {
     const url = new URL(request.url);
 
     if (request.method === "GET" && url.pathname === "/") {
-      return htmlResponse(renderHome());
+      return redirectResponse("/login");
     }
 
     if (request.method === "GET" && url.pathname === "/login") {
@@ -260,8 +260,8 @@ async function renderDomains(request, env) {
     return auth.response;
   }
 
-  const rows = await domainSummaries(env);
-  return htmlResponse(renderDomainsHtml(request, rows.results, auth));
+  const [domainRows, messageRows] = await Promise.all([domainSummaries(env), allMessages(env)]);
+  return htmlResponse(renderDomainsHtml(request, domainRows.results, auth, messageRows.results));
 }
 
 async function renderDomainsJson(request, env) {
@@ -986,19 +986,21 @@ function renderLatestHtml(messages) {
 </html>`;
 }
 
-function renderDomainsHtml(request, domains, auth) {
+function renderDomainsHtml(request, domains, auth, messages = []) {
   const token = auth.token || "";
   const tokenQuery = token ? `?token=${encodeURIComponent(token)}` : "";
   const empty = domains.length ? "" : "<p class='empty'>当前没有邮件域。</p>";
   const items = domains
     .map((row) => {
       const href = `/domain/${encodeURIComponent(row.domain)}${tokenQuery}`;
-      return `<article class="mail">
+      return `<article class="mail domain-card">
   <h2 class="subject"><a href="${escapeHtml(href)}">${escapeHtml(row.domain)}</a></h2>
   <div class="meta">${row.count} 封邮件 &nbsp; 最新: ${escapeHtml(formatBeijingTime(row.latest_at))}</div>
 </article>`;
     })
     .join("");
+  const messageEmpty = messages.length ? "" : "<p class='empty'>当前没有邮件。</p>";
+  const messageItems = messages.map(renderMessage).join("");
   return `<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -1025,7 +1027,16 @@ function renderDomainsHtml(request, domains, auth) {
   <div class="link-result" id="linkResult"></div>
 </form>
   </header>
-  <main>${empty}${items}</main>
+  <main class="domains-layout">
+    <aside class="domain-sidebar">
+      <div class="panel-title">子域名</div>
+      ${empty}${items}
+    </aside>
+    <section class="domain-mail-window">
+      <div class="panel-title">按时间倒序的邮件</div>
+      ${messageEmpty}${messageItems}
+    </section>
+  </main>
   <script>
     const form = document.getElementById("linkForm");
     const result = document.getElementById("linkResult");
@@ -1307,8 +1318,14 @@ function mailboxCss() {
     .inline-btn { white-space:nowrap; }
     .split-header { display:flex; align-items:flex-start; justify-content:space-between; gap:24px; padding:20px 30px; }
     .title-row { display:flex; align-items:center; gap:12px; }
-    .domains-page main { max-width:760px; margin:0 auto; padding:24px 14px 48px; }
-    .domains-page .mail { margin-bottom:12px; }
+    .domains-layout { display:grid; grid-template-columns:minmax(240px, 320px) minmax(0, 1fr); gap:18px; max-width:1280px; margin:0 auto; padding:18px 18px 48px; }
+    .domain-sidebar, .domain-mail-window { min-width:0; }
+    .domain-sidebar { position:sticky; top:88px; align-self:start; max-height:calc(100vh - 112px); overflow:auto; }
+    .domain-mail-window { max-height:calc(100vh - 112px); overflow:auto; padding-right:4px; }
+    .panel-title { color:var(--muted); font-size:13px; font-weight:700; margin:0 0 10px; }
+    .domains-page .mail { margin-bottom:10px; }
+    .domain-card { padding:12px; }
+    .domain-card .subject { font-size:16px; margin-bottom:5px; }
     .link-form { width:min(420px, 48vw); border:1px solid var(--border); border-radius:8px; padding:12px; background:#fbfcff; }
     .link-form label { display:block; color:var(--muted); font-size:13px; margin-bottom:8px; }
     .form-row { display:flex; gap:8px; }
@@ -1353,7 +1370,10 @@ function mailboxCss() {
       .split-header { display:block; padding:18px 16px; }
       .title-row { align-items:flex-start; justify-content:space-between; }
       .link-form { width:100%; margin-top:14px; }
-      .domains-page main, .domain-page main { max-width:none; padding:18px 16px 40px; }
+      .domains-layout { display:block; max-width:none; padding:14px 12px 32px; }
+      .domain-sidebar, .domain-mail-window { position:static; max-height:none; overflow:visible; }
+      .domain-mail-window { margin-top:16px; padding-right:0; }
+      .domain-page main { max-width:none; padding:18px 16px 40px; }
       .inbox-page main, .all-mail-page main { max-width:none; padding:14px 12px 32px; }
       .compact-header { padding:12px; }
       .form-row { display:block; }
