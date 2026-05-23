@@ -381,6 +381,10 @@ test("inbox page compacts body and highlights verification code", async () => {
   const html = await response.text();
   assert.match(html, /class="code">123456/);
   assert.match(html, /inbox-page/);
+  assert.match(html, /id="createMailboxLink"/);
+  assert.match(html, /data-link-address="inbox@example\.test"/);
+  assert.match(html, /生成并复制专属链接/);
+  assert.match(html, /\/admin\/link\.json/);
   assert.match(html, /本邮箱仅用于临时收信/);
   assert.match(html, /有效期为 1 个月/);
   assert.match(html, /2026-05-22 15:00:00 北京时间/);
@@ -487,6 +491,9 @@ test("domain page groups messages by individual mailbox", async () => {
   assert.match(html, /id="mailboxSearch"/);
   assert.match(html, /data-address="a@sss\.example\.test"/);
   assert.match(html, /data-copy="a@sss\.example\.test"/);
+  assert.match(html, /data-link-address="a@sss\.example\.test"/);
+  assert.match(html, /生成并复制专属链接/);
+  assert.match(html, /\/admin\/link\.json/);
   assert.match(html, /mailbox-actions/);
   assert.match(html, /最新: 2026-05-22 15:00:00 北京时间/);
   assert.match(html, /复制/);
