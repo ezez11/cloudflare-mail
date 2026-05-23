@@ -1,0 +1,11 @@
+name = "cloudflare-mail-links"
+main = "src/worker.js"
+compatibility_date = "2026-05-22"
+
+[vars]
+PUBLIC_BASE_URL = "https://your-domain.example"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "mail_links"
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
