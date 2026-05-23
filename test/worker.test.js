@@ -140,6 +140,16 @@ test("latest page requires token", async () => {
   assert.match(response.headers.get("location"), /^\/login/);
 });
 
+test("root redirects to login page", async () => {
+  const response = await worker.fetch(
+    new Request("https://mail.example.test/"),
+    envWithMessages([])
+  );
+
+  assert.equal(response.status, 302);
+  assert.equal(response.headers.get("location"), "/login");
+});
+
 test("login sets a session cookie that can access domains", async () => {
   const loginResponse = await worker.fetch(
     new Request("https://mail.example.test/login", {
@@ -560,15 +570,46 @@ test("domains json lists observed recipient domains", async () => {
   assert.equal(payload.domains[0].count, 2);
 });
 
-test("domains page shows dedicated link form", async () => {
+test("domains page shows dedicated link form and latest messages panel", async () => {
   const response = await worker.fetch(
     new Request("https://mail.example.test/domains?token=view-token"),
-    envWithMessages([])
+    envWithMessages([
+      {
+        id: 1,
+        recipient: "a@sss.example.test",
+        sender: "sender@example.test",
+        subject: "Old",
+        date_header: "",
+        body: "old body",
+        raw_truncated: 0,
+        created_at: "2026-05-22T07:00:00.000Z",
+      },
+      {
+        id: 2,
+        recipient: "b@mail.example.test",
+        sender: "sender@example.test",
+        subject: "New",
+        date_header: "",
+        body: "new body",
+        raw_truncated: 0,
+        created_at: "2026-05-22T08:00:00.000Z",
+      },
+    ])
   );
 
   assert.equal(response.status, 200);
   const html = await response.text();
   assert.match(html, /class="split-header"/);
+  assert.match(html, /class="domains-layout"/);
+  assert.match(html, /class="domain-sidebar"/);
+  assert.match(html, /class="domain-mail-window"/);
+  assert.match(html, /子域名/);
+  assert.match(html, /按时间倒序的邮件/);
+  assert.match(html, /sss\.example\.test/);
+  assert.match(html, /mail\.example\.test/);
+  assert.match(html, /<h2 class="subject">New<\/h2>/);
+  assert.match(html, /<h2 class="subject">Old<\/h2>/);
+  assert.match(html, /new body/);
   assert.match(html, /\/mailboxes\?token=view-token/);
   assert.match(html, /查看全部邮件/);
   assert.match(html, /创建专属链接/);
