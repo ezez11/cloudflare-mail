@@ -260,7 +260,7 @@ async function renderDomains(request, env) {
     return auth.response;
   }
 
-  const [domainRows, messageRows] = await Promise.all([domainSummaries(env), allMessages(env)]);
+  const [domainRows, messageRows] = await Promise.all([domainSummaries(env), latestAllMessages(env, 10)]);
   return htmlResponse(renderDomainsHtml(request, domainRows.results, auth, messageRows.results));
 }
 
