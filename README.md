@@ -8,6 +8,7 @@
 - 使用 Cloudflare D1 保存邮件和专属邮箱链接。
 - 按收件域名查看邮件域，按单独邮箱查看某个域名下的邮箱。
 - 支持“全部邮件”页面，按时间倒序直接查看所有邮件。
+- 支持在邮件域页面基于现有子域名生成邮箱地址，并一键复制。
 - 支持账号密码登录后台查看页面，也支持 `MAIL_VIEW_TOKEN` 链接访问。
 - 支持为单个邮箱生成专属查看链接 `/m/<token>`。
 - 支持管理员 API 创建、删除和查看专属邮箱链接。
@@ -76,8 +77,8 @@ messages
 | GET | `https://your-domain.example/login` | 无 | 登录页面。 |
 | POST | `https://your-domain.example/login` | `LOGIN_USERNAME` / `LOGIN_PASSWORD` | 提交账号密码，登录成功后写入 `mail_session` Cookie。 |
 | GET | `https://your-domain.example/logout` | 登录会话 | 退出登录并清除会话 Cookie。 |
-| GET | `https://your-domain.example/domains` | 登录会话或 `MAIL_VIEW_TOKEN` | 查看所有收到过邮件的收件域名、邮件数量和最新收信时间。 |
-| GET | `https://your-domain.example/domains?token=<MAIL_VIEW_TOKEN>` | `MAIL_VIEW_TOKEN` | 不登录，直接通过 token 查看邮件域页面。 |
+| GET | `https://your-domain.example/domains` | 登录会话或 `MAIL_VIEW_TOKEN` | 查看所有收到过邮件的收件域名、邮件数量和最新收信时间；页面上方提供基于现有子域名的邮箱生成器。 |
+| GET | `https://your-domain.example/domains?token=<MAIL_VIEW_TOKEN>` | `MAIL_VIEW_TOKEN` | 不登录，直接通过 token 查看邮件域页面，并使用邮箱生成器。 |
 | GET | `https://your-domain.example/mailboxes` | 登录会话或 `MAIL_VIEW_TOKEN` | 查看全部邮件，按时间倒序直接显示每封邮件。 |
 | GET | `https://your-domain.example/mailboxes?token=<MAIL_VIEW_TOKEN>` | `MAIL_VIEW_TOKEN` | 不登录，直接通过 token 查看全部邮件。 |
 | GET | `https://your-domain.example/domain/<domain>` | 登录会话或 `MAIL_VIEW_TOKEN` | 查看某个域名下的单独邮箱列表，例如 `sss.example.com`。 |

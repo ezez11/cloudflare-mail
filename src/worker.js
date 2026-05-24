@@ -989,6 +989,9 @@ function renderLatestHtml(messages) {
 function renderDomainsHtml(request, domains, auth, messages = []) {
   const token = auth.token || "";
   const tokenQuery = token ? `?token=${encodeURIComponent(token)}` : "";
+  const domainOptions = domains.length
+    ? domains.map((row) => `<option value="${escapeHtml(row.domain)}">${escapeHtml(row.domain)}</option>`).join("")
+    : '<option value="">暂无子域名</option>';
   const empty = domains.length ? "" : "<p class='empty'>当前没有邮件域。</p>";
   const items = domains
     .map((row) => {
@@ -1016,16 +1019,27 @@ function renderDomainsHtml(request, domains, auth, messages = []) {
       <h1>邮件域</h1>
       <a class="btn secondary inline-btn" href="/mailboxes${tokenQuery}">查看全部邮件</a>
     </div>
-    <form class="link-form" id="linkForm" method="post" action="/admin/link">
+    <div class="header-panels">
+    <section class="tool-panel generator-panel" id="emailGenerator">
+      <label>邮箱生成器</label>
+      <div class="form-row generator-row">
+        <input id="generatorName" type="text" placeholder="前缀">
+        <select id="generatorDomain">${domainOptions}</select>
+        <button type="button" id="generateEmail">生成邮箱</button>
+        <button type="button" id="copyGeneratedEmail" class="secondary-button">复制邮箱</button>
+      </div>
+      <input id="generatedEmail" class="generated-email" type="text" readonly placeholder="邮箱地址">
+    </section>
+    <form class="tool-panel link-form" id="linkForm" method="post" action="/admin/link">
       <input type="hidden" name="token" value="${escapeHtml(token)}">
       <label for="address">创建专属链接</label>
   <div class="form-row">
     <input id="address" name="address" type="email" placeholder="name@example.com" required>
     <button type="submit">生成</button>
-    <button type="button" id="copyAddress" class="secondary-button">复制邮箱</button>
   </div>
-  <div class="link-result" id="linkResult"></div>
+  <div class="link-result" id="linkResult"><span class="placeholder">专属链接</span></div>
 </form>
+    </div>
   </header>
   <main class="domains-layout">
     <aside class="domain-sidebar">
@@ -1040,8 +1054,11 @@ function renderDomainsHtml(request, domains, auth, messages = []) {
   <script>
     const form = document.getElementById("linkForm");
     const result = document.getElementById("linkResult");
-    const addressInput = document.getElementById("address");
-    const copyAddress = document.getElementById("copyAddress");
+    const generatorName = document.getElementById("generatorName");
+    const generatorDomain = document.getElementById("generatorDomain");
+    const generateEmail = document.getElementById("generateEmail");
+    const copyGeneratedEmail = document.getElementById("copyGeneratedEmail");
+    const generatedEmail = document.getElementById("generatedEmail");
     async function copyText(text, button, label) {
       if (!text) return;
       try {
@@ -1066,7 +1083,26 @@ function renderDomainsHtml(request, domains, auth, messages = []) {
         setTimeout(() => { button.textContent = label; }, 1200);
       }
     }
-    copyAddress.addEventListener("click", () => copyText(addressInput.value.trim(), copyAddress, "复制邮箱"));
+    function randomFrom(chars, length) {
+      const values = new Uint32Array(length);
+      crypto.getRandomValues(values);
+      return Array.from(values, (value) => chars[value % chars.length]).join("");
+    }
+    function makeLocalPart() {
+      const raw = generatorName.value.trim().toLowerCase();
+      const sanitized = raw.replace(/[^a-z0-9._-]/g, "").replace(/^[._-]+|[._-]+$/g, "");
+      return sanitized || ("mail" + randomFrom("abcdefghijklmnopqrstuvwxyz0123456789", 7));
+    }
+    generateEmail.addEventListener("click", () => {
+      const domain = generatorDomain.value;
+      if (!domain) {
+        generatedEmail.value = "";
+        generatedEmail.placeholder = "当前没有可用子域名";
+        return;
+      }
+      generatedEmail.value = makeLocalPart() + "@" + domain;
+    });
+    copyGeneratedEmail.addEventListener("click", () => copyText(generatedEmail.value.trim(), copyGeneratedEmail, "复制邮箱"));
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
       result.textContent = "生成中...";
@@ -1399,6 +1435,7 @@ function mailboxCss() {
     .inline-btn { white-space:nowrap; }
     .split-header { display:flex; align-items:flex-start; justify-content:space-between; gap:24px; padding:20px 30px; }
     .title-row { display:flex; align-items:center; gap:12px; }
+    .header-panels { display:flex; align-items:stretch; justify-content:flex-end; gap:12px; flex-wrap:wrap; width:min(980px, 76vw); }
     .domains-layout { display:grid; grid-template-columns:minmax(240px, 320px) minmax(0, 1fr); gap:18px; max-width:1280px; margin:0 auto; padding:18px 18px 48px; }
     .domain-sidebar, .domain-mail-window { min-width:0; }
     .domain-sidebar { position:sticky; top:88px; align-self:start; max-height:calc(100vh - 112px); overflow:auto; }
@@ -1407,15 +1444,20 @@ function mailboxCss() {
     .domains-page .mail { margin-bottom:10px; }
     .domain-card { padding:12px; }
     .domain-card .subject { font-size:16px; margin-bottom:5px; }
-    .link-form { width:min(420px, 48vw); border:1px solid var(--border); border-radius:8px; padding:12px; background:#fbfcff; }
-    .link-form label { display:block; color:var(--muted); font-size:13px; margin-bottom:8px; }
+    .tool-panel { flex:1 1 430px; min-height:132px; max-width:520px; border:1px solid var(--border); border-radius:8px; padding:12px; background:#fbfcff; display:flex; flex-direction:column; }
+    .tool-panel label { display:block; color:var(--muted); font-size:13px; margin-bottom:8px; }
+    .generator-panel { width:auto; }
+    .generator-row select { width:150px; min-width:120px; border:1px solid var(--border); border-radius:6px; padding:9px 10px; font:14px Arial,"Microsoft YaHei",sans-serif; background:#fff; }
+    .generated-email { display:block; width:100%; margin-top:8px; border:1px solid var(--border); border-radius:6px; padding:9px 10px; font:14px Arial,"Microsoft YaHei",sans-serif; color:var(--text); background:#fff; min-height:38px; }
+    .link-form { width:auto; }
     .form-row { display:flex; gap:8px; }
     .form-row input { flex:1; min-width:0; border:1px solid var(--border); border-radius:6px; padding:9px 10px; font:14px Arial,"Microsoft YaHei",sans-serif; }
     .form-row button { border:1px solid var(--accent); background:var(--accent); color:#fff; border-radius:6px; padding:9px 14px; font-size:14px; cursor:pointer; }
     .form-row .secondary-button { background:#fff; color:var(--accent); white-space:nowrap; }
     .mini-button { border:1px solid var(--border); background:#fff; color:var(--accent); border-radius:6px; padding:6px 9px; font-size:12px; line-height:1; cursor:pointer; white-space:nowrap; }
-    .link-result { display:flex; align-items:center; gap:8px; margin-top:8px; font-size:12px; word-break:break-all; line-height:1.35; min-height:16px; }
-    .link-result a { text-decoration:none; }
+    .link-result { display:flex; align-items:center; gap:8px; margin-top:8px; font-size:12px; word-break:break-all; line-height:1.35; min-height:38px; border:1px solid var(--border); border-radius:6px; background:#fff; padding:8px 10px; }
+    .link-result a { flex:1; min-width:0; text-decoration:none; }
+    .placeholder { color:var(--muted); }
     .error-inline { color:#9b1c1c; }
     .login-page { min-height:100vh; display:grid; place-items:center; }
     .login-main { width:min(380px, 100%); padding:16px; }
@@ -1451,6 +1493,8 @@ function mailboxCss() {
     @media (max-width:760px) {
       .split-header { display:block; padding:18px 16px; }
       .title-row { align-items:flex-start; justify-content:space-between; }
+      .header-panels { display:block; width:100%; }
+      .tool-panel { width:100%; max-width:none; min-height:0; margin-top:14px; }
       .link-form { width:100%; margin-top:14px; }
       .domains-layout { display:block; max-width:none; padding:14px 12px 32px; }
       .domain-sidebar, .domain-mail-window { position:static; max-height:none; overflow:visible; }
@@ -1460,6 +1504,7 @@ function mailboxCss() {
       .compact-header { padding:12px; }
       .header-actions { width:100%; justify-content:flex-start; }
       .form-row { display:block; }
+      .generator-row select { width:100%; margin-top:8px; }
       .form-row button { width:100%; margin-top:8px; }
       .link-result { display:block; }
       .link-result .mini-button { width:100%; margin-top:8px; }
